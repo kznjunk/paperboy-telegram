@@ -1,6 +1,6 @@
 # Paperboy Telegram
 
-No dependencies: it uses the `fetch` built into Node 18+.
+No dependencies: it uses the `fetch` built into Node 20.3+.
 
 ## How?
 
@@ -51,6 +51,7 @@ const res = await sendTelegram(chatId, `🔴 <b>${escape(appName)} is down</b>`,
 | `silent`   | `false` | deliver without a notification sound           |
 | `preview`  | `false` | show the preview of the first link             |
 | `threadId` |         | topic id, for a group with topics              |
+| `replyTo`  |         | message id to answer, shown as a Telegram reply |
 
 The request gives up after 10 seconds. Change it with
 `require('@kznjunk/paperboy-telegram')(token, { timeout: 5000 })`.
@@ -62,6 +63,72 @@ Like the other paperboys, `sendTelegram` does not throw when sending fails, it r
 - the `Error` when Telegram can't be reached (network, timeout)
 
 So check `res.ok === true`.
+
+## Listening to replies
+
+When someone writes to the bot, Telegram keeps the message for 24 hours
+until you collect it. Two ways to collect, pick one per bot.
+
+The handler gets the [message](https://core.telegram.org/bots/api#message) and
+the whole update. When the person used "Reply" on one of your messages,
+`message.reply_to_message.message_id` is the `result.message_id` that
+`sendTelegram` returned, so keep it to know what they answered.
+
+Always pass `chats` with your own chat id: anyone who finds the bot can write to it.
+
+### Long polling, from any server (even localhost)
+
+```js
+const { sendTelegram, listen } = require('@kznjunk/paperboy-telegram')(token)
+
+const stop = listen(async (message) => {
+    if (message.text === 'ack' && message.reply_to_message) {
+        await sendTelegram(message.chat.id, 'acknowledged 👍', { replyTo: message.message_id })
+    }
+}, { chats: [chatId] })
+
+// later, on shutdown
+await stop()
+```
+
+Only one process may poll a bot: two of them (or a webhook still set) make
+Telegram answer `409 Conflict`. `listen` keeps going after a failure and retries
+every 5 seconds.
+
+| option    | default | what it does                                       |
+|-----------|---------|----------------------------------------------------|
+| `chats`   |         | only these chat ids reach the handler              |
+| `wait`    | `30`    | seconds Telegram holds each poll open              |
+| `retry`   | `5000`  | ms before polling again after an error             |
+| `onError` | log     | gets the errors (network, refused, handler throws) |
+
+### Webhook, when the server has a public HTTPS url
+
+```js
+const { webhook, setWebhook } = require('@kznjunk/paperboy-telegram')(token)
+
+// once (setWebhook turns polling off for this bot, deleteWebhook turns it back on)
+await setWebhook('https://example.com/telegram', secret)
+
+// Express, or a plain node http server
+app.post('/telegram', express.json(), webhook(secret, async (message) => {
+    // same message as with listen
+}, { chats: [chatId] }))
+```
+
+Requests without the right secret get a `401`. The secret is 1 to 256 characters
+among `A-Z a-z 0-9 _ -`.
+
+On a framework that is not Express-like (Strapi/Koa), check the secret yourself
+and pass the parsed body to `handleUpdate`:
+
+```js
+const { handleUpdate } = require('@kznjunk/paperboy-telegram')(token)
+
+if (ctx.get('x-telegram-bot-api-secret-token') !== secret) return ctx.throw(401)
+await handleUpdate(ctx.request.body, async (message) => { /* ... */ }, { chats: [chatId] })
+ctx.status = 200
+```
 
 ## Note
 
