@@ -1,0 +1,22 @@
+{
+  "name": "@kznjunk/paperboy-telegram",
+  "version": "1.0.0",
+  "description": "Send Telegram messages a bit more quicker",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kznjunk/paperboy-telegram.git"
+  },
+  "author": "kibwashere",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kznjunk/paperboy-telegram/issues"
+  },
+  "homepage": "https://github.com/kznjunk/paperboy-telegram#readme"
+}
